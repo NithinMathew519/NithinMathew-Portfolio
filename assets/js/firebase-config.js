@@ -1,6 +1,6 @@
 // Firebase configuration and initialization
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-import { getFirestore, doc, getDoc, setDoc, updateDoc, increment } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { getFirestore, doc, getDoc, setDoc, updateDoc, increment, addDoc, collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { getAnalytics } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics.js';
 
 // Firebase configuration
@@ -22,6 +22,108 @@ const analytics = getAnalytics(app);
 console.log('Firebase initialized successfully');
 console.log('Firebase app:', app);
 console.log('Firestore database:', db);
+
+// Function to get location using browser geolocation API
+async function getUserLocation() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error('Geolocation is not supported by this browser'));
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        resolve({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+          method: 'browser_geolocation'
+        });
+      },
+      (error) => {
+        console.log('Geolocation error:', error.message);
+        resolve(null); // Don't reject, just return null
+      },
+      {
+        enableHighAccuracy: false,
+        timeout: 5000,
+        maximumAge: 600000 // 10 minutes
+      }
+    );
+  });
+}
+
+// Function to get approximate location using IP (free service)
+async function getLocationFromIP() {
+  try {
+    const response = await fetch('https://ipapi.co/json/');
+    const data = await response.json();
+    
+    if (data.latitude && data.longitude) {
+      return {
+        latitude: data.latitude,
+        longitude: data.longitude,
+        city: data.city,
+        region: data.region,
+        country: data.country_name,
+        countryCode: data.country_code,
+        ip: data.ip,
+        method: 'ip_geolocation'
+      };
+    }
+  } catch (error) {
+    console.error('Error getting location from IP:', error);
+  }
+  return null;
+}
+
+// Function to track visitor with location
+async function trackVisitorWithLocation() {
+  try {
+    console.log('Tracking visitor with location...');
+    
+    // Get basic visitor info
+    const visitorData = {
+      timestamp: new Date(),
+      userAgent: navigator.userAgent,
+      referrer: document.referrer || 'direct',
+      language: navigator.language,
+      screen: {
+        width: screen.width,
+        height: screen.height
+      },
+      viewport: {
+        width: window.innerWidth,
+        height: window.innerHeight
+      }
+    };
+
+    // Try to get location (IP-based first, then browser if user allows)
+    let location = await getLocationFromIP();
+    
+    if (!location) {
+      // Fallback to browser geolocation (requires user permission)
+      location = await getUserLocation();
+    }
+
+    if (location) {
+      visitorData.location = location;
+      console.log('Location obtained:', location);
+    } else {
+      console.log('Location not available');
+    }
+
+    // Store visitor data in Firebase
+    const visitorsRef = collection(db, 'portfolio', 'analytics', 'visitors');
+    await addDoc(visitorsRef, visitorData);
+    
+    console.log('Visitor tracked successfully:', visitorData);
+    return visitorData;
+  } catch (error) {
+    console.error('Error tracking visitor:', error);
+    return null;
+  }
+}
 
 // Function to increment portfolio views
 async function incrementPortfolioViews() {
@@ -93,16 +195,34 @@ async function getCurrentViewCount() {
 function updateViewsCounter(count) {
   const viewsElement = document.getElementById('views-counter');
   if (viewsElement) {
+    console.log('Updating views counter with count:', count);
+    
     // Update the purecounter end value
     viewsElement.setAttribute('data-purecounter-end', count);
+    viewsElement.setAttribute('data-purecounter-start', '0');
     
-    // If PureCounter is available, reinitialize it
-    if (typeof PureCounter !== 'undefined') {
-      new PureCounter();
-    } else {
-      // Fallback: directly update the text
-      viewsElement.textContent = count;
-    }
+    // Try to reinitialize PureCounter
+    setTimeout(() => {
+      try {
+        if (typeof PureCounter !== 'undefined') {
+          // Clear existing instances for this element
+          if (PureCounter.instances) {
+            PureCounter.instances = PureCounter.instances.filter(instance => instance.element !== viewsElement);
+          }
+          
+          // Create new instance
+          new PureCounter({
+            selector: '#views-counter'
+          });
+        } else {
+          // Fallback: directly update the text
+          viewsElement.textContent = count;
+        }
+      } catch (error) {
+        console.error('Error with PureCounter:', error);
+        viewsElement.textContent = count;
+      }
+    }, 200);
   }
 }
 
@@ -122,17 +242,66 @@ function getLocalViews() {
 document.addEventListener('DOMContentLoaded', async function() {
   console.log('DOM loaded, initializing portfolio views tracking...');
   
-  // Get current view count first
-  await getCurrentViewCount();
-  
-  // Increment view count on every page load/refresh
-  console.log('About to increment portfolio views...');
-  await incrementPortfolioViews();
+  // Wait for all scripts to load
+  setTimeout(async () => {
+    try {
+      // Track visitor with location (runs in background)
+      trackVisitorWithLocation();
+      
+      // Increment view count on every page load/refresh
+      console.log('About to increment portfolio views...');
+      await incrementPortfolioViews();
+    } catch (error) {
+      console.error('Error during initialization:', error);
+      // Fallback to local storage
+      incrementLocalViews();
+    }
+  }, 1000);
 });
 
 // Export functions for external use
 window.portfolioViews = {
   increment: incrementPortfolioViews,
   getCurrent: getCurrentViewCount,
-  updateCounter: updateViewsCounter
+  updateCounter: updateViewsCounter,
+  
+  // New functions for analytics
+  getVisitorData: async function() {
+    try {
+      const visitorsRef = collection(db, 'portfolio', 'analytics', 'visitors');
+      const snapshot = await getDocs(visitorsRef);
+      const visitors = [];
+      
+      snapshot.forEach((doc) => {
+        visitors.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+      
+      return visitors.sort((a, b) => b.timestamp - a.timestamp);
+    } catch (error) {
+      console.error('Error getting visitor data:', error);
+      return [];
+    }
+  },
+  
+  getLocationStats: async function() {
+    try {
+      const visitors = await this.getVisitorData();
+      const locationStats = {};
+      
+      visitors.forEach(visitor => {
+        if (visitor.location) {
+          const key = visitor.location.country || visitor.location.city || 'Unknown';
+          locationStats[key] = (locationStats[key] || 0) + 1;
+        }
+      });
+      
+      return locationStats;
+    } catch (error) {
+      console.error('Error getting location stats:', error);
+      return {};
+    }
+  }
 };
