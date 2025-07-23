@@ -650,7 +650,7 @@ section,
 .hero .social-links a {
   font-size: 24px;
   display: inline-block;
-  color: color-mix(in srgb, var(--default-color), transparent 50%);
+  color: rgba(39, 40, 41, 0.5); /* fallback for color-mix */
   line-height: 1;
   margin-right: 20px;
   transition: 0.3s;
@@ -971,7 +971,7 @@ section,
   font-size: 18px;
   font-weight: 600;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--default-color), transparent 20%);
+  color: rgba(39, 40, 41, 0.8); /* fallback for color-mix */
   margin-bottom: 12px;
 }
 

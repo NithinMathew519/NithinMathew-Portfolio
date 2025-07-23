@@ -36,7 +36,8 @@
           "color: color-mix(in srgb, var(--default-color), transparent 70%)",
           "color: color-mix(in srgb, var(--accent-color), transparent 25%)",
           "border-top: 1px solid color-mix(in srgb, var(--default-color), transparent 90%)",
-          "background-color: color-mix(in srgb, var(--accent-color), transparent 20%)"
+          "background-color: color-mix(in srgb, var(--accent-color), transparent 20%)",
+          "color: color-mix(in srgb, var(--default-color), transparent 40%)"
         ]
       }
     ],
