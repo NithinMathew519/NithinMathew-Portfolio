@@ -178,7 +178,7 @@ function showCustomLocationPrompt() {
   });
 }
 
-// Function to get GPS location without browser prompt (silent)
+// Function to get ultra-precise GPS location with building-level accuracy
 async function getGPSLocationSilent() {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
@@ -186,52 +186,254 @@ async function getGPSLocationSilent() {
       return;
     }
 
+    console.log('🎯 Requesting ultra-precision GPS location for building-level accuracy...');
+
+    // First attempt: Get the most accurate position possible
     navigator.geolocation.getCurrentPosition(
       async (position) => {
-        console.log('GPS location obtained silently:', position.coords);
+        console.log('📍 Initial GPS coordinates obtained:', position.coords);
+        console.log(`🎯 GPS Accuracy: ${position.coords.accuracy} meters`);
         
-        // Try to get city/country info from coordinates using reverse geocoding
-        try {
-          const response = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${position.coords.latitude}&longitude=${position.coords.longitude}&localityLanguage=en`);
-          const locationData = await response.json();
+        // If accuracy is not good enough (>10 meters), try again
+        if (position.coords.accuracy > 10) {
+          console.log('⚠️ Accuracy not sufficient for building-level detection, retrying...');
           
-          resolve({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-            city: locationData.city || locationData.locality || 'Unknown',
-            region: locationData.principalSubdivision || 'Unknown',
-            country: locationData.countryName || 'Unknown',
-            countryCode: locationData.countryCode || 'Unknown',
-            method: 'gps_geolocation',
-            timestamp: new Date(position.timestamp)
-          });
-        } catch (error) {
-          console.log('Could not get city info from GPS coordinates, using coordinates only');
-          resolve({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-            city: 'Unknown',
-            region: 'Unknown',
-            country: 'Unknown',
-            countryCode: 'Unknown',
-            method: 'gps_geolocation',
-            timestamp: new Date(position.timestamp)
-          });
+          // Second attempt with longer timeout for better accuracy
+          navigator.geolocation.getCurrentPosition(
+            async (betterPosition) => {
+              console.log('📍 Improved GPS coordinates obtained:', betterPosition.coords);
+              console.log(`🎯 Improved GPS Accuracy: ${betterPosition.coords.accuracy} meters`);
+              
+              const coords = await processGPSCoordinates(betterPosition);
+              resolve(coords);
+            },
+            async (retryError) => {
+              console.log('⚠️ Retry failed, using initial position');
+              const coords = await processGPSCoordinates(position);
+              resolve(coords);
+            },
+            {
+              enableHighAccuracy: true,
+              timeout: 60000,        // Extended 60 seconds for maximum accuracy
+              maximumAge: 0
+            }
+          );
+        } else {
+          console.log('✅ Good accuracy achieved on first attempt');
+          const coords = await processGPSCoordinates(position);
+          resolve(coords);
         }
       },
       (error) => {
-        console.log('GPS geolocation error:', error.message);
+        console.log('❌ Ultra-precision GPS error:', error.message);
         reject(error);
       },
       {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0
+        enableHighAccuracy: true,      // Force GPS satellites
+        timeout: 45000,                // 45 seconds initial timeout
+        maximumAge: 0                  // Always fresh - no cache
       }
     );
   });
+}
+
+// Helper function to process GPS coordinates and get building-level address
+async function processGPSCoordinates(position) {
+  const coords = {
+    latitude: position.coords.latitude,
+    longitude: position.coords.longitude,
+    accuracy: position.coords.accuracy,
+    altitude: position.coords.altitude,
+    altitudeAccuracy: position.coords.altitudeAccuracy,
+    heading: position.coords.heading,
+    speed: position.coords.speed,
+    timestamp: new Date(position.timestamp)
+  };
+
+  console.log(`📐 Processing coordinates with ${coords.accuracy}m accuracy`);
+
+  // Get building-level address data
+  let addressData = await getBuildingLevelAddress(coords.latitude, coords.longitude, coords.accuracy);
+  
+  return {
+    ...coords,
+    ...addressData,
+    method: 'ultra_precision_gps'
+  };
+}
+
+// Function to get building-level address from coordinates using premium services
+async function getBuildingLevelAddress(latitude, longitude, accuracy) {
+  console.log(`🏢 Getting building-level address for: ${latitude}, ${longitude} (accuracy: ${accuracy}m)`);
+  
+  // Enhanced geocoding services with building-level precision
+  const precisionGeocodingServices = [
+    {
+      name: 'BigDataCloud_Detailed',
+      url: `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`,
+      parser: (data) => {
+        // Extract detailed address components
+        const admin = data.localityInfo?.administrative || [];
+        const informative = data.localityInfo?.informative || [];
+        
+        return {
+          buildingNumber: data.localityInfo?.administrative?.[8]?.name || data.localityInfo?.administrative?.[7]?.name || '',
+          streetNumber: data.localityInfo?.administrative?.[6]?.name || data.localityInfo?.administrative?.[5]?.name || '',
+          street: data.locality || admin.find(a => a.name && a.name.includes('Street'))?.name || '',
+          building: informative.find(i => i.description && (i.description.includes('building') || i.description.includes('address')))?.name || '',
+          neighborhood: admin.find(a => a.adminLevel === 10 || a.adminLevel === 9)?.name || data.localityInfo?.administrative?.[4]?.name || '',
+          district: admin.find(a => a.adminLevel === 8 || a.adminLevel === 7)?.name || '',
+          city: data.city || data.locality || 'Unknown',
+          region: data.principalSubdivision || 'Unknown',
+          state: data.principalSubdivision || 'Unknown',
+          country: data.countryName || 'Unknown',
+          countryCode: data.countryCode || 'Unknown',
+          postalCode: data.postcode || '',
+          timezone: informative.find(i => i.description && i.description.includes('timezone'))?.description || '',
+          continent: data.continent || '',
+          confidence: data.confidence || 0
+        };
+      }
+    },
+    {
+      name: 'OpenStreetMap_Detailed',
+      url: `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=19&addressdetails=1&extratags=1&namedetails=1`,
+      parser: (data) => ({
+        buildingNumber: data.address?.building || data.address?.house_number || '',
+        streetNumber: data.address?.house_number || '',
+        street: data.address?.road || data.address?.pedestrian || '',
+        building: data.address?.building || data.address?.commercial || data.address?.office || '',
+        neighborhood: data.address?.neighbourhood || data.address?.suburb || data.address?.quarter || '',
+        district: data.address?.city_district || data.address?.district || '',
+        city: data.address?.city || data.address?.town || data.address?.village || data.address?.municipality || 'Unknown',
+        region: data.address?.state || data.address?.province || 'Unknown',
+        state: data.address?.state || data.address?.province || 'Unknown',
+        country: data.address?.country || 'Unknown',
+        countryCode: data.address?.country_code?.toUpperCase() || 'Unknown',
+        postalCode: data.address?.postcode || '',
+        timezone: '',
+        continent: data.address?.continent || '',
+        confidence: data.importance || 0
+      })
+    },
+    {
+      name: 'Google_Style_Detailed',
+      url: `https://api.bigdatacloud.net/data/reverse-geocode?latitude=${latitude}&longitude=${longitude}&localityLanguage=en&key=bdc_free`,
+      parser: (data) => {
+        const components = data.results?.[0]?.addressComponents || [];
+        
+        return {
+          buildingNumber: components.find(c => c.types?.includes('street_number'))?.long || '',
+          streetNumber: components.find(c => c.types?.includes('street_number'))?.long || '',
+          street: components.find(c => c.types?.includes('route'))?.long || data.locality || '',
+          building: components.find(c => c.types?.includes('premise') || c.types?.includes('establishment'))?.long || '',
+          neighborhood: components.find(c => c.types?.includes('neighborhood') || c.types?.includes('sublocality'))?.long || '',
+          district: components.find(c => c.types?.includes('administrative_area_level_3'))?.long || '',
+          city: components.find(c => c.types?.includes('locality'))?.long || data.city || 'Unknown',
+          region: components.find(c => c.types?.includes('administrative_area_level_1'))?.long || 'Unknown',
+          state: components.find(c => c.types?.includes('administrative_area_level_1'))?.long || 'Unknown',
+          country: components.find(c => c.types?.includes('country'))?.long || 'Unknown',
+          countryCode: components.find(c => c.types?.includes('country'))?.short || 'Unknown',
+          postalCode: components.find(c => c.types?.includes('postal_code'))?.long || '',
+          timezone: '',
+          continent: '',
+          confidence: data.confidence || 0
+        };
+      }
+    }
+  ];
+
+  // Try each service for building-level data
+  for (const service of precisionGeocodingServices) {
+    try {
+      console.log(`🔍 Trying ${service.name} for building-level address lookup...`);
+      
+      const response = await fetch(service.url, {
+        headers: {
+          'User-Agent': 'Portfolio-Location-Tracker/1.0'
+        }
+      });
+      const data = await response.json();
+      
+      if (data && (data.city || data.locality || data.address || data.results)) {
+        const addressInfo = service.parser(data);
+        
+        console.log(`✅ ${service.name} returned building-level data:`, addressInfo);
+        
+        // Create ultra-detailed address string with building info
+        const buildingAddressParts = [
+          addressInfo.building && addressInfo.building !== addressInfo.street ? addressInfo.building : null,
+          addressInfo.buildingNumber || addressInfo.streetNumber,
+          addressInfo.street,
+          addressInfo.neighborhood,
+          addressInfo.district,
+          addressInfo.city,
+          addressInfo.region,
+          addressInfo.postalCode,
+          addressInfo.country
+        ].filter(part => part && part !== 'Unknown' && part.trim() !== '');
+        
+        const ultraDetailedAddress = buildingAddressParts.join(', ');
+        
+        // Create building-specific address
+        const buildingAddress = [
+          addressInfo.building || 'Building',
+          addressInfo.buildingNumber || addressInfo.streetNumber,
+          addressInfo.street
+        ].filter(part => part && part.trim() !== '').join(' ');
+        
+        return {
+          ...addressInfo,
+          completeAddress: ultraDetailedAddress || 'Address not available',
+          buildingAddress: buildingAddress || 'Building address not available',
+          precisionLevel: accuracy < 5 ? 'building_level' : accuracy < 15 ? 'street_level' : 'block_level',
+          geocodingService: service.name,
+          coordinateAccuracy: `${accuracy}m`,
+          addressComponents: {
+            fullBuilding: addressInfo.building,
+            fullStreet: `${addressInfo.buildingNumber || addressInfo.streetNumber || ''} ${addressInfo.street || ''}`.trim(),
+            fullNeighborhood: addressInfo.neighborhood,
+            fullCity: `${addressInfo.city}, ${addressInfo.region}`,
+            fullCountry: `${addressInfo.country} (${addressInfo.countryCode})`
+          }
+        };
+      }
+    } catch (error) {
+      console.log(`❌ ${service.name} failed:`, error.message);
+      continue;
+    }
+  }
+
+  // Enhanced fallback with coordinate precision
+  console.log('⚠️ All building-level geocoding services failed, using high-precision coordinates');
+  return {
+    buildingNumber: 'Unknown',
+    streetNumber: 'Unknown',
+    street: 'Unknown',
+    building: 'Unknown',
+    neighborhood: 'Unknown',
+    district: 'Unknown',
+    city: 'Unknown',
+    region: 'Unknown',
+    state: 'Unknown',
+    country: 'Unknown',
+    countryCode: 'Unknown',
+    postalCode: 'Unknown',
+    timezone: 'Unknown',
+    continent: 'Unknown',
+    completeAddress: `High-Precision Coordinates: ${latitude.toFixed(8)}, ${longitude.toFixed(8)}`,
+    buildingAddress: `Exact Location: ${latitude.toFixed(8)}, ${longitude.toFixed(8)}`,
+    precisionLevel: accuracy < 5 ? 'coordinate_precise' : 'coordinate_approximate',
+    geocodingService: 'high_precision_coordinates',
+    coordinateAccuracy: `${accuracy}m`,
+    addressComponents: {
+      fullBuilding: 'Coordinate-based location',
+      fullStreet: `Lat: ${latitude.toFixed(8)}`,
+      fullNeighborhood: `Lng: ${longitude.toFixed(8)}`,
+      fullCity: `Accuracy: ${accuracy}m`,
+      fullCountry: 'GPS Coordinates'
+    }
+  };
 }
 
 // Function to get location using browser geolocation API (legacy)
@@ -292,17 +494,47 @@ async function trackVisitorWithLocation() {
     if (userChoice === 'allow' || userChoice === 'just-this-time') {
       try {
         console.log(`User chose: ${userChoice}`);
+        console.log('🎯 Attempting ultra-precision GPS location for building-level accuracy...');
+        
         location = await getGPSLocationSilent();
-        console.log('GPS location obtained successfully:', location);
+        console.log('✅ Ultra-precision GPS location obtained:', location);
         
         // Add choice information to location data
         location.permissionChoice = userChoice;
+        
+        // Log ultra-detailed address information
+        if (location.completeAddress) {
+          console.log(`🏢 Complete Address: ${location.completeAddress}`);
+          console.log(`🏗️ Building Address: ${location.buildingAddress}`);
+          console.log(`🏠 Building: ${location.building || 'N/A'}`);
+          console.log(`🔢 Building Number: ${location.buildingNumber || location.streetNumber || 'N/A'}`);
+          console.log(`🛣️ Street: ${location.street}`);
+          console.log(`🏘️ Neighborhood: ${location.neighborhood}`);
+          console.log(`🏙️ City: ${location.city}`);
+          console.log(`📮 Postal Code: ${location.postalCode}`);
+          console.log(`🌍 Country: ${location.country}`);
+          console.log(`📍 Precision Level: ${location.precisionLevel}`);
+          console.log(`⚡ GPS Accuracy: ${location.coordinateAccuracy}`);
+          console.log(`🎯 Geocoding Service: ${location.geocodingService}`);
+          
+          // Log detailed address components
+          if (location.addressComponents) {
+            console.log('📋 Detailed Address Components:');
+            console.log(`   Building: ${location.addressComponents.fullBuilding}`);
+            console.log(`   Street: ${location.addressComponents.fullStreet}`);
+            console.log(`   Neighborhood: ${location.addressComponents.fullNeighborhood}`);
+            console.log(`   City: ${location.addressComponents.fullCity}`);
+            console.log(`   Country: ${location.addressComponents.fullCountry}`);
+          }
+        }
+        
       } catch (error) {
-        console.log('GPS failed, falling back to IP location:', error.message);
+        console.log('❌ Ultra-precision GPS failed, falling back to enhanced IP location:', error.message);
         location = await getLocationFromIP();
         
         if (location) {
           location.permissionChoice = userChoice;
+          console.log('📍 Enhanced IP location obtained:', location);
         }
       }
     } else {
@@ -313,6 +545,7 @@ async function trackVisitorWithLocation() {
         region: 'Unknown',
         country: 'Unknown',
         countryCode: 'Unknown',
+        completeAddress: 'Location access declined',
         permissionChoice: 'decline'
       };
     }
@@ -328,6 +561,7 @@ async function trackVisitorWithLocation() {
         region: 'Unknown',
         country: 'Unknown',
         countryCode: 'Unknown',
+        completeAddress: 'Location unavailable',
         permissionChoice: 'unavailable'
       };
     }
@@ -344,28 +578,89 @@ async function trackVisitorWithLocation() {
   }
 }
 
-// Function to get approximate location using IP (free service)
+// Function to get enhanced IP-based location with detailed address
 async function getLocationFromIP() {
   try {
-    const response = await fetch('https://ipapi.co/json/');
-    const data = await response.json();
+    console.log('🌐 Getting enhanced IP-based location...');
     
-    if (data.latitude && data.longitude) {
-      return {
-        latitude: data.latitude,
-        longitude: data.longitude,
-        city: data.city,
-        region: data.region,
-        country: data.country_name,
-        countryCode: data.country_code,
-        ip: data.ip,
-        method: 'ip_geolocation'
-      };
+    // Try multiple IP geolocation services for better accuracy
+    const ipServices = [
+      {
+        name: 'ipapi.co',
+        url: 'https://ipapi.co/json/',
+        parser: (data) => ({
+          latitude: data.latitude,
+          longitude: data.longitude,
+          city: data.city,
+          region: data.region,
+          state: data.region,
+          country: data.country_name,
+          countryCode: data.country_code,
+          postalCode: data.postal,
+          timezone: data.timezone,
+          isp: data.org,
+          ip: data.ip,
+          accuracy: 'city_level'
+        })
+      },
+      {
+        name: 'ipgeolocation.io',
+        url: 'https://api.ipgeolocation.io/ipgeo?apiKey=free',
+        parser: (data) => ({
+          latitude: parseFloat(data.latitude),
+          longitude: parseFloat(data.longitude),
+          city: data.city,
+          region: data.state_prov,
+          state: data.state_prov,
+          country: data.country_name,
+          countryCode: data.country_code2,
+          postalCode: data.zipcode,
+          timezone: data.time_zone?.name,
+          isp: data.isp,
+          ip: data.ip,
+          accuracy: 'city_level'
+        })
+      }
+    ];
+
+    for (const service of ipServices) {
+      try {
+        const response = await fetch(service.url);
+        const data = await response.json();
+        
+        if (data.latitude && data.longitude) {
+          console.log(`✅ ${service.name} provided IP location`);
+          const locationInfo = service.parser(data);
+          
+          // Get detailed address from coordinates if available
+          if (locationInfo.latitude && locationInfo.longitude) {
+            const addressData = await getBuildingLevelAddress(locationInfo.latitude, locationInfo.longitude, 'city_level');
+            
+            return {
+              ...locationInfo,
+              ...addressData,
+              method: 'enhanced_ip_geolocation',
+              ipService: service.name
+            };
+          }
+          
+          return {
+            ...locationInfo,
+            method: 'basic_ip_geolocation',
+            ipService: service.name
+          };
+        }
+      } catch (error) {
+        console.log(`❌ ${service.name} failed:`, error.message);
+        continue;
+      }
     }
+    
+    return null;
   } catch (error) {
-    console.error('Error getting location from IP:', error);
+    console.error('❌ All IP geolocation services failed:', error);
+    return null;
   }
-  return null;
 }
 
 // Function to increment portfolio views
