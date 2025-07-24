@@ -239,14 +239,14 @@ function getLocalViews() {
 }
 
 // Initialize portfolio views tracking
-document.addEventListener('DOMContentLoaded', async function() {
+document.addEventListener('DOMContentLoaded', function() {
   console.log('DOM loaded, initializing portfolio views tracking...');
   
   // Wait for all scripts to load
   setTimeout(async () => {
     try {
       // Track visitor with location (runs in background)
-      trackVisitorWithLocation();
+      await trackVisitorWithLocation();
       
       // Increment view count on every page load/refresh
       console.log('About to increment portfolio views...');

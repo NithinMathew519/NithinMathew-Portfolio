@@ -494,7 +494,7 @@
             <h3 class="resume-title">Professional Experience</h3>
             <div class="resume-item">
               <h4>Software Engineer</h4>
-              <h5>INV Software Solutions LLC. | Jan 2024 - Present</h5>
+              <h5>INV Software Solutions LLC. | July 2025 - Present</h5>
               <ul>
                 <li>Design and develop secure web applications, implementing robust access control mechanisms, encryption protocols, and vulnerability scanning processes to safeguard sensitive data and ensure compliance with industry security standards.</li>
                 <li>Engineer multi-threaded application components to efficiently process concurrent client requests, optimizing system performance and scalability to support high-traffic workloads.</li>
@@ -939,13 +939,74 @@
   <footer id="footer" class="footer position-relative light-background">
 
     <div class="container">
-      <div class="copyright text-center ">
+      <div class="row">
+        <div class="col-12 text-center mb-3">
+          <small class="text-muted">
+            <i class="bi bi-info-circle"></i>
+            This site uses analytics to understand visitor engagement. 
+            <a href="#" data-bs-toggle="modal" data-bs-target="#privacyModal" class="text-decoration-none">
+              Privacy Policy
+            </a>
+          </small>
+        </div>
+      </div>
+      <div class="copyright text-center">
         <p>© <span>Copyright</span> <strong class="px-1 sitename">Nithin Mathew</strong> <span>All Rights
             Reserved</span></p>
       </div>
     </div>
 
   </footer>
+
+  <!-- Privacy Policy Modal -->
+  <div class="modal fade" id="privacyModal" tabindex="-1" aria-labelledby="privacyModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="privacyModalLabel">
+            <i class="bi bi-shield-check"></i> Privacy Policy
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <h6><i class="bi bi-graph-up"></i> Analytics Collection</h6>
+          <p>This portfolio website collects basic analytics to understand visitor engagement and improve the user experience. The following information may be collected:</p>
+          
+          <ul>
+            <li><strong>Visit Information:</strong> Page views, visit timestamps, and session duration</li>
+            <li><strong>Location Data:</strong> General geographic location (country, city) based on IP address</li>
+            <li><strong>Technical Information:</strong> Browser type, device type, screen resolution, and language preference</li>
+            <li><strong>Referral Source:</strong> Which website or search engine directed you here</li>
+          </ul>
+
+          <h6><i class="bi bi-lock"></i> Data Protection</h6>
+          <ul>
+            <li>No personally identifiable information (PII) is collected</li>
+            <li>IP addresses are not stored directly</li>
+            <li>Location data is limited to city/country level only</li>
+            <li>No tracking cookies are used for advertising purposes</li>
+            <li>Data is stored securely using Firebase services</li>
+          </ul>
+
+          <h6><i class="bi bi-gear"></i> Your Control</h6>
+          <p>You can control your privacy by:</p>
+          <ul>
+            <li>Using browser settings to block location sharing</li>
+            <li>Disabling JavaScript to prevent analytics collection</li>
+            <li>Using privacy-focused browsers or extensions</li>
+          </ul>
+
+          <h6><i class="bi bi-envelope"></i> Contact</h6>
+          <p>If you have questions about this privacy policy or data collection, please contact me through the contact form on this website.</p>
+          
+          <small class="text-muted">Last updated: <span id="privacy-date"></span></small>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Scroll Top -->
   <a href="#" id="scroll-top" class="scroll-top d-flex align-items-center justify-content-center"><i
@@ -972,6 +1033,16 @@
   <!-- Main JS File -->
   <script src="assets/js/formspree-handler.js"></script>
   <script src="assets/js/main.js"></script>
+
+  <!-- Set privacy policy date -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const privacyDate = document.getElementById('privacy-date');
+      if (privacyDate) {
+        privacyDate.textContent = new Date().toLocaleDateString();
+      }
+    });
+  </script>
 
 </body>
 
