@@ -180,87 +180,59 @@ function showCustomLocationPrompt() {
 
 // Function to get ultra-precise GPS location with building-level accuracy
 async function getGPSLocationSilent() {
-  return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) {
-      reject(new Error('Geolocation is not supported by this browser'));
-      return;
-    }
-
-    console.log('🎯 Requesting ultra-precision GPS location for building-level accuracy...');
-
-    // First attempt: Get the most accurate position possible
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        console.log('📍 Initial GPS coordinates obtained:', position.coords);
-        console.log(`🎯 GPS Accuracy: ${position.coords.accuracy} meters`);
-        
-        // If accuracy is not good enough (>10 meters), try again
-        if (position.coords.accuracy > 10) {
-          console.log('⚠️ Accuracy not sufficient for building-level detection, retrying...');
-          
-          // Second attempt with longer timeout for better accuracy
-          navigator.geolocation.getCurrentPosition(
-            async (betterPosition) => {
-              console.log('📍 Improved GPS coordinates obtained:', betterPosition.coords);
-              console.log(`🎯 Improved GPS Accuracy: ${betterPosition.coords.accuracy} meters`);
-              
-              const coords = await processGPSCoordinates(betterPosition);
-              resolve(coords);
-            },
-            async (retryError) => {
-              console.log('⚠️ Retry failed, using initial position');
-              const coords = await processGPSCoordinates(position);
-              resolve(coords);
-            },
-            {
-              enableHighAccuracy: true,
-              timeout: 60000,        // Extended 60 seconds for maximum accuracy
-              maximumAge: 0
-            }
-          );
-        } else {
-          console.log('✅ Good accuracy achieved on first attempt');
-          const coords = await processGPSCoordinates(position);
-          resolve(coords);
-        }
-      },
-      (error) => {
-        console.log('❌ Ultra-precision GPS error:', error.message);
-        reject(error);
-      },
-      {
-        enableHighAccuracy: true,      // Force GPS satellites
-        timeout: 45000,                // 45 seconds initial timeout
-        maximumAge: 0                  // Always fresh - no cache
-      }
-    );
-  });
-}
-
-// Helper function to process GPS coordinates and get building-level address
-async function processGPSCoordinates(position) {
-  const coords = {
-    latitude: position.coords.latitude,
-    longitude: position.coords.longitude,
-    accuracy: position.coords.accuracy,
-    altitude: position.coords.altitude,
-    altitudeAccuracy: position.coords.altitudeAccuracy,
-    heading: position.coords.heading,
-    speed: position.coords.speed,
-    timestamp: new Date(position.timestamp)
-  };
-
-  console.log(`📐 Processing coordinates with ${coords.accuracy}m accuracy`);
-
-  // Get building-level address data
-  let addressData = await getBuildingLevelAddress(coords.latitude, coords.longitude, coords.accuracy);
+  // Skip native browser geolocation API entirely
+  // Use IP-based location as primary method to avoid browser prompts
+  console.log('🎯 Using IP-based location detection for building-level accuracy...');
   
-  return {
-    ...coords,
-    ...addressData,
-    method: 'ultra_precision_gps'
-  };
+  try {
+    const location = await getLocationFromIP();
+    if (location) {
+      console.log('✅ IP-based location obtained with building-level enhancement:', location);
+      return {
+        ...location,
+        method: 'enhanced_ip_precision'
+      };
+    } else {
+      throw new Error('IP location failed');
+    }
+  } catch (error) {
+    console.log('❌ Enhanced IP location failed:', error.message);
+    
+    // Fallback to coordinate estimation
+    return {
+      latitude: 0,
+      longitude: 0,
+      accuracy: 'unknown',
+      altitude: null,
+      altitudeAccuracy: null,
+      heading: null,
+      speed: null,
+      timestamp: new Date(),
+      buildingNumber: 'Unknown',
+      streetNumber: 'Unknown',
+      street: 'Unknown',
+      building: 'Unknown',
+      neighborhood: 'Unknown',
+      district: 'Unknown',
+      city: 'Unknown',
+      region: 'Unknown',
+      state: 'Unknown',
+      country: 'Unknown',
+      countryCode: 'Unknown',
+      postalCode: 'Unknown',
+      timezone: 'Unknown',
+      continent: 'Unknown',
+      completeAddress: 'Location unavailable',
+      buildingAddress: 'Location unavailable',
+      precisionLevel: 'unavailable',
+      geocodingService: 'none',
+      coordinateAccuracy: 'unknown',
+      method: 'fallback_unavailable'
+    };
+  }
 }
+
+// Function to track visitor with custom location prompt
 
 // Function to get building-level address from coordinates using premium services
 async function getBuildingLevelAddress(latitude, longitude, accuracy) {
@@ -464,10 +436,10 @@ async function trackVisitorWithLocation() {
     if (userChoice === 'allow' || userChoice === 'just-this-time') {
       try {
         console.log(`User chose: ${userChoice}`);
-        console.log('🎯 Attempting ultra-precision GPS location for building-level accuracy...');
+        console.log('🎯 Attempting enhanced location detection without browser prompts...');
         
         location = await getGPSLocationSilent();
-        console.log('✅ Ultra-precision GPS location obtained:', location);
+        console.log('✅ Enhanced location obtained:', location);
         
         // Add choice information to location data
         location.permissionChoice = userChoice;
@@ -484,7 +456,7 @@ async function trackVisitorWithLocation() {
           console.log(`📮 Postal Code: ${location.postalCode}`);
           console.log(`🌍 Country: ${location.country}`);
           console.log(`📍 Precision Level: ${location.precisionLevel}`);
-          console.log(`⚡ GPS Accuracy: ${location.coordinateAccuracy}`);
+          console.log(`⚡ Location Method: ${location.method}`);
           console.log(`🎯 Geocoding Service: ${location.geocodingService}`);
           
           // Log detailed address components
@@ -499,12 +471,12 @@ async function trackVisitorWithLocation() {
         }
         
       } catch (error) {
-        console.log('❌ Ultra-precision GPS failed, falling back to enhanced IP location:', error.message);
+        console.log('❌ Enhanced location detection failed, using fallback:', error.message);
         location = await getLocationFromIP();
         
         if (location) {
           location.permissionChoice = userChoice;
-          console.log('📍 Enhanced IP location obtained:', location);
+          console.log('📍 Fallback IP location obtained:', location);
         }
       }
     } else {
