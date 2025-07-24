@@ -436,36 +436,6 @@ async function getBuildingLevelAddress(latitude, longitude, accuracy) {
   };
 }
 
-// Function to get location using browser geolocation API (legacy)
-async function getUserLocation() {
-  return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) {
-      reject(new Error('Geolocation is not supported by this browser'));
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        resolve({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy,
-          method: 'browser_geolocation'
-        });
-      },
-      (error) => {
-        console.log('Geolocation error:', error.message);
-        resolve(null); // Don't reject, just return null
-      },
-      {
-        enableHighAccuracy: false,
-        timeout: 5000,
-        maximumAge: 600000 // 10 minutes
-      }
-    );
-  });
-}
-
 // Function to track visitor with custom location prompt
 async function trackVisitorWithLocation() {
   try {
