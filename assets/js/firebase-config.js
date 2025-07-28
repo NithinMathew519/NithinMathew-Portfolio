@@ -45,7 +45,7 @@ function showCustomLocationPrompt() {
     notification.style.cssText = `
       position: fixed;
       top: 10px;
-      left: 300px;
+      left: 150px;
       background: rgba(60, 60, 60, 0.95);
       color: white;
       border-radius: 6px;
@@ -60,12 +60,13 @@ function showCustomLocationPrompt() {
       border: 1px solid rgba(255, 255, 255, 0.1);
       
       @media (max-width: 768px) {
+        top: 15px;
         left: 50%;
         transform: translateX(-50%);
-        width: calc(100vw - 20px);
-        max-width: 280px;
+        width: calc(100vw - 30px);
+        max-width: 320px;
         font-size: 12px;
-        border-radius: 5px;
+        border-radius: 8px;
       }
     `;
 
@@ -113,9 +114,9 @@ function showCustomLocationPrompt() {
           justify-content: center;
           
           @media (max-width: 768px) {
-            font-size: 14px;
-            min-width: 20px;
-            min-height: 20px;
+            font-size: 16px;
+            min-width: 24px;
+            min-height: 24px;
             width: auto;
             height: auto;
             touch-action: manipulation;
@@ -129,8 +130,9 @@ function showCustomLocationPrompt() {
         gap: 3px;
         
         @media (max-width: 768px) {
-          gap: 3px;
-          flex-wrap: wrap;
+          gap: 5px;
+          flex-wrap: nowrap;
+          padding: 8px 10px;
         }
       ">
         <button id="allowLocation" style="
@@ -146,10 +148,11 @@ function showCustomLocationPrompt() {
           flex: 1;
           
           @media (max-width: 768px) {
-            padding: 7px 8px;
-            font-size: 11px;
+            padding: 8px 10px;
+            font-size: 12px;
             touch-action: manipulation;
-            min-height: 32px;
+            min-height: 36px;
+            border-radius: 5px;
           }
         ">Allow</button>
         <button id="justThisTime" style="
@@ -165,10 +168,11 @@ function showCustomLocationPrompt() {
           flex: 1;
           
           @media (max-width: 768px) {
-            padding: 7px 8px;
-            font-size: 11px;
+            padding: 8px 10px;
+            font-size: 12px;
             touch-action: manipulation;
-            min-height: 32px;
+            min-height: 36px;
+            border-radius: 5px;
           }
         ">Just this time</button>
         <button id="declineLocation" style="
@@ -184,10 +188,11 @@ function showCustomLocationPrompt() {
           flex: 1;
           
           @media (max-width: 768px) {
-            padding: 7px 8px;
-            font-size: 11px;
+            padding: 8px 10px;
+            font-size: 12px;
             touch-action: manipulation;
-            min-height: 32px;
+            min-height: 36px;
+            border-radius: 5px;
           }
         ">Decline</button>
       </div>
