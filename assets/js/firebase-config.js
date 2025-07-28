@@ -225,519 +225,116 @@ function showCustomLocationPrompt() {
   });
 }
 
-// Function to get ultra-precise GPS location with building-level accuracy
-async function getGPSLocationSilent() {
-  // Skip native browser geolocation API entirely
-  // Use IP-based location as primary method to avoid browser prompts
-  console.log('🎯 Using IP-based location detection for building-level accuracy...');
-  
+// Function to get simplified location data
+async function getSimpleLocationData() {
   try {
-    const location = await getLocationFromIP();
-    if (location) {
-      console.log('✅ IP-based location obtained with building-level enhancement:', location);
+    console.log('🌐 Getting basic location information...');
+    
+    // Simple IP geolocation service
+    const response = await fetch('https://ipapi.co/json/');
+    const data = await response.json();
+    
+    if (data.latitude && data.longitude) {
+      console.log('✅ Basic location obtained');
+      
+      // Try to get more detailed address information
+      let houseAddress = 'Not available';
+      try {
+        // Use a simple reverse geocoding to get street address
+        const geoResponse = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${data.latitude}&lon=${data.longitude}&addressdetails=1`);
+        const geoData = await geoResponse.json();
+        
+        if (geoData.address) {
+          // Build house address from available data
+          const addressParts = [
+            geoData.address.house_number || '',
+            geoData.address.road || geoData.address.street || '',
+            geoData.address.building || geoData.address.apartment || geoData.address.commercial || ''
+          ].filter(part => part.trim() !== '');
+          
+          houseAddress = addressParts.length > 0 ? addressParts.join(' ') : 'Address not found';
+        }
+      } catch (error) {
+        console.log('Could not get detailed address:', error.message);
+      }
+      
       return {
-        ...location,
-        method: 'enhanced_ip_precision'
+        ip: data.ip,
+        houseAddress: houseAddress,
+        streetAddress: `${data.postal ? data.postal + ' ' : ''}${data.city || 'Unknown'}`,
+        city: data.city || 'Unknown',
+        state: data.region || 'Unknown',
+        pincode: data.postal || 'Unknown',
+        timestamp: new Date()
       };
     } else {
-      throw new Error('IP location failed');
+      throw new Error('Location data unavailable');
     }
   } catch (error) {
-    console.log('❌ Enhanced IP location failed:', error.message);
+    console.log('❌ Location detection failed:', error.message);
     
-    // Fallback to coordinate estimation
     return {
-      latitude: 0,
-      longitude: 0,
-      accuracy: 'unknown',
-      altitude: null,
-      altitudeAccuracy: null,
-      heading: null,
-      speed: null,
-      timestamp: new Date(),
-      buildingNumber: 'Unknown',
-      streetNumber: 'Unknown',
-      street: 'Unknown',
-      building: 'Unknown',
-      neighborhood: 'Unknown',
-      district: 'Unknown',
+      ip: 'Unknown',
+      houseAddress: 'Address unavailable',
+      streetAddress: 'Address unavailable',
       city: 'Unknown',
-      region: 'Unknown',
       state: 'Unknown',
-      country: 'Unknown',
-      countryCode: 'Unknown',
-      postalCode: 'Unknown',
-      timezone: 'Unknown',
-      continent: 'Unknown',
-      completeAddress: 'Location unavailable',
-      buildingAddress: 'Location unavailable',
-      precisionLevel: 'unavailable',
-      geocodingService: 'none',
-      coordinateAccuracy: 'unknown',
-      method: 'fallback_unavailable'
+      pincode: 'Unknown',
+      timestamp: new Date()
     };
   }
 }
 
-// Function to track visitor with custom location prompt
-
-// Function to get building-level address from coordinates using premium services
-async function getBuildingLevelAddress(latitude, longitude, accuracy) {
-  console.log(`🏢 Getting precise street address for: ${latitude}, ${longitude} (accuracy: ${accuracy})`);
-  
-  // Enhanced geocoding services with street-level precision
-  const precisionGeocodingServices = [
-    {
-      name: 'OpenStreetMap_HighPrecision',
-      url: `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&extratags=1&namedetails=1`,
-      parser: (data) => ({
-        streetNumber: data.address?.house_number || '',
-        street: data.address?.road || data.address?.street || '',
-        building: data.address?.building || data.address?.commercial || data.address?.office || '',
-        neighborhood: data.address?.neighbourhood || data.address?.suburb || data.address?.quarter || '',
-        city: data.address?.city || data.address?.town || data.address?.village || 'Unknown',
-        state: data.address?.state || data.address?.province || 'Unknown',
-        country: data.address?.country || 'Unknown',
-        countryCode: data.address?.country_code?.toUpperCase() || 'Unknown',
-        postalCode: data.address?.postcode || '',
-        confidence: data.importance || 0
-      })
-    },
-    {
-      name: 'MapBox_Geocoding',
-      url: `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json?access_token=pk.eyJ1IjoiZXhhbXBsZSIsImEiOiJjazk4cHBmOG0wMGF3M29tbzZlZWc5YmU4In0.K5tgCGdx2qyI0YJD8yZpIg&types=address`,
-      parser: (data) => {
-        const feature = data.features?.[0];
-        const context = feature?.context || [];
-        
-        return {
-          streetNumber: feature?.address || '',
-          street: feature?.text || '',
-          building: '',
-          neighborhood: context.find(c => c.id?.includes('neighborhood'))?.text || '',
-          city: context.find(c => c.id?.includes('place'))?.text || 'Unknown',
-          state: context.find(c => c.id?.includes('region'))?.text || 'Unknown',
-          country: context.find(c => c.id?.includes('country'))?.text || 'Unknown',
-          countryCode: context.find(c => c.id?.includes('country'))?.short_code?.toUpperCase() || 'Unknown',
-          postalCode: context.find(c => c.id?.includes('postcode'))?.text || '',
-          confidence: feature?.relevance || 0
-        };
-      }
-    },
-    {
-      name: 'LocationIQ_Geocoding',
-      url: `https://us1.locationiq.com/v1/reverse.php?key=pk.6c5bb90e3a5e0e3a5e0e3a5e0e3a5e&lat=${latitude}&lon=${longitude}&format=json&addressdetails=1`,
-      parser: (data) => ({
-        streetNumber: data.address?.house_number || '',
-        street: data.address?.road || '',
-        building: data.address?.building || '',
-        neighborhood: data.address?.neighbourhood || data.address?.suburb || '',
-        city: data.address?.city || data.address?.town || 'Unknown',
-        state: data.address?.state || 'Unknown',
-        country: data.address?.country || 'Unknown',
-        countryCode: data.address?.country_code?.toUpperCase() || 'Unknown',
-        postalCode: data.address?.postcode || '',
-        confidence: data.importance || 0
-      })
-    },
-    {
-      name: 'BigDataCloud_Enhanced',
-      url: `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`,
-      parser: (data) => {
-        const admin = data.localityInfo?.administrative || [];
-        
-        return {
-          streetNumber: admin.find(a => a.adminLevel >= 10)?.name || '',
-          street: data.locality || admin.find(a => a.name && (a.name.includes('Street') || a.name.includes('Avenue') || a.name.includes('Road')))?.name || '',
-          building: '',
-          neighborhood: admin.find(a => a.adminLevel === 9 || a.adminLevel === 8)?.name || '',
-          city: data.city || 'Unknown',
-          state: data.principalSubdivision || 'Unknown',
-          country: data.countryName || 'Unknown',
-          countryCode: data.countryCode || 'Unknown',
-          postalCode: data.postcode || '',
-          confidence: data.confidence || 0
-        };
-      }
-    },
-    {
-      name: 'GeocodeFarm',
-      url: `https://www.geocode.farm/v3/json/reverse/?lat=${latitude}&lon=${longitude}&country=us&lang=en&count=1`,
-      parser: (data) => {
-        const result = data.geocoding_results?.RESULTS?.[0];
-        
-        return {
-          streetNumber: result?.ADDRESS?.street_number || '',
-          street: result?.ADDRESS?.street_name || '',
-          building: '',
-          neighborhood: result?.ADDRESS?.locality || '',
-          city: result?.ADDRESS?.city || 'Unknown',
-          state: result?.ADDRESS?.state || 'Unknown',
-          country: result?.ADDRESS?.country || 'Unknown',
-          countryCode: result?.ADDRESS?.country_code || 'Unknown',
-          postalCode: result?.ADDRESS?.postal_code || '',
-          confidence: result?.accuracy || 0
-        };
-      }
-    },
-    {
-      name: 'PositionStack',
-      url: `http://api.positionstack.com/v1/reverse?access_key=free&query=${latitude},${longitude}&limit=1`,
-      parser: (data) => {
-        const result = data.data?.[0];
-        
-        return {
-          streetNumber: result?.number || '',
-          street: result?.street || '',
-          building: '',
-          neighborhood: result?.neighbourhood || '',
-          city: result?.locality || 'Unknown',
-          state: result?.region || 'Unknown',
-          country: result?.country || 'Unknown',
-          countryCode: result?.country_code || 'Unknown',
-          postalCode: result?.postal_code || '',
-          confidence: result?.confidence || 0
-        };
-      }
-    }
-  ];
-
-  // Try each service for precise street address
-  for (const service of precisionGeocodingServices) {
-    try {
-      console.log(`🔍 Trying ${service.name} for precise street address...`);
-      
-      const response = await fetch(service.url, {
-        headers: {
-          'User-Agent': 'Portfolio-Location-Tracker/1.0'
-        }
-      });
-      const data = await response.json();
-      
-      if (data && (data.address || data.city || data.locality || data.items || data.features || data.geocoding_results || data.data)) {
-        const addressInfo = service.parser(data);
-        
-        // Only proceed if we got actual street information
-        if (addressInfo.street && addressInfo.street !== 'Unknown' && addressInfo.street !== addressInfo.city) {
-          console.log(`✅ ${service.name} returned precise street data:`, addressInfo);
-          
-          // Create detailed address string
-          const addressParts = [
-            addressInfo.streetNumber,
-            addressInfo.street,
-            addressInfo.neighborhood,
-            addressInfo.city,
-            addressInfo.state,
-            addressInfo.postalCode,
-            addressInfo.country
-          ].filter(part => part && part !== 'Unknown' && part.trim() !== '');
-          
-          const completeAddress = addressParts.join(', ');
-          
-          // Create building-specific address
-          const buildingAddress = [
-            addressInfo.building || '',
-            addressInfo.streetNumber,
-            addressInfo.street
-          ].filter(part => part && part.trim() !== '').join(' ') || 'Address not found';
-          
-          return {
-            streetNumber: addressInfo.streetNumber,
-            street: addressInfo.street,
-            building: addressInfo.building,
-            neighborhood: addressInfo.neighborhood,
-            city: addressInfo.city,
-            state: addressInfo.state,
-            country: addressInfo.country,
-            countryCode: addressInfo.countryCode,
-            postalCode: addressInfo.postalCode,
-            completeAddress: completeAddress || 'Address not available',
-            buildingAddress: buildingAddress,
-            precisionLevel: accuracy === 'city_level' ? 'ip_enhanced' : 'street_level',
-            geocodingService: service.name
-          };
-        }
-      }
-    } catch (error) {
-      console.log(`❌ ${service.name} failed:`, error.message);
-      continue;
-    }
-  }
-
-  // Fallback - return minimal but clean data
-  console.log('⚠️ All street-level geocoding services failed, using basic location data');
-  return {
-    streetNumber: '',
-    street: 'Street not found',
-    building: '',
-    neighborhood: '',
-    city: 'Unknown',
-    state: 'Unknown',
-    country: 'Unknown',
-    countryCode: 'Unknown',
-    postalCode: '',
-    completeAddress: `Coordinates: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
-    buildingAddress: 'Address not available',
-    precisionLevel: 'coordinates_only',
-    geocodingService: 'fallback'
-  };
-}
-
-// Function to track visitor with custom location prompt
+// Function to track visitor with simplified location data
 async function trackVisitorWithLocation() {
   try {
-    console.log('Tracking visitor with custom location prompt...');
+    console.log('Tracking visitor with simplified location data...');
     
-    // Get basic visitor info
-    const visitorData = {
-      timestamp: new Date(),
-      userAgent: navigator.userAgent,
-      referrer: document.referrer || 'direct',
-      language: navigator.language,
-      screen: {
-        width: screen.width,
-        height: screen.height
-      },
-      viewport: {
-        width: window.innerWidth,
-        height: window.innerHeight
-      }
-    };
-
     // Always show custom location permission prompt
     const userChoice = await showCustomLocationPrompt();
-    let location = null;
+    let locationData = null;
 
     if (userChoice === 'allow' || userChoice === 'just-this-time') {
       try {
         console.log(`User chose: ${userChoice}`);
-        console.log('🎯 Attempting enhanced location detection without browser prompts...');
+        console.log('🎯 Getting basic location information...');
         
-        location = await getGPSLocationSilent();
-        console.log('✅ Enhanced location obtained:', location);
-        
-        // Add choice information to location data
-        location.permissionChoice = userChoice;
-        
-        // Log clean address information
-        if (location.completeAddress) {
-          console.log(`🏢 Complete Address: ${location.completeAddress}`);
-          console.log(`🏗️ Building Address: ${location.buildingAddress}`);
-          console.log(`🏠 Building: ${location.building || 'N/A'}`);
-          console.log(`🔢 Street Number: ${location.streetNumber || 'N/A'}`);
-          console.log(`🛣️ Street: ${location.street}`);
-          console.log(`🏘️ Neighborhood: ${location.neighborhood}`);
-          console.log(`🏙️ City: ${location.city}`);
-          console.log(`📮 Postal Code: ${location.postalCode}`);
-          console.log(`🌍 Country: ${location.country}`);
-          console.log(`📍 Precision Level: ${location.precisionLevel}`);
-          console.log(`⚡ Location Method: ${location.method}`);
-          console.log(`🎯 Geocoding Service: ${location.geocodingService}`);
-        }
+        locationData = await getSimpleLocationData();
+        console.log('✅ Location data obtained:', locationData);
         
       } catch (error) {
-        console.log('❌ Enhanced location detection failed, using fallback:', error.message);
-        location = await getLocationFromIP();
-        
-        if (location) {
-          location.permissionChoice = userChoice;
-          console.log('📍 Fallback IP location obtained:', location);
-        }
+        console.log('❌ Location detection failed:', error.message);
+        locationData = {
+          ip: 'Unknown',
+          houseAddress: 'Location unavailable',
+          streetAddress: 'Location unavailable',
+          city: 'Unknown',
+          state: 'Unknown',
+          pincode: 'Unknown',
+          timestamp: new Date()
+        };
       }
     } else {
       console.log('User declined location access');
-      location = {
-        method: 'declined',
-        city: 'Unknown',
-        region: 'Unknown',
-        country: 'Unknown',
-        countryCode: 'Unknown',
-        completeAddress: 'Location access declined',
-        permissionChoice: 'decline'
+      locationData = {
+        ip: 'Declined',
+        houseAddress: 'Location access declined',
+        streetAddress: 'Location access declined',
+        city: 'Declined',
+        state: 'Declined',
+        pincode: 'Declined',
+        timestamp: new Date()
       };
     }
 
-    if (location) {
-      visitorData.location = location;
-      console.log('Final location data:', location);
-    } else {
-      console.log('No location data available');
-      visitorData.location = {
-        method: 'unavailable',
-        city: 'Unknown',
-        region: 'Unknown',
-        country: 'Unknown',
-        countryCode: 'Unknown',
-        completeAddress: 'Location unavailable',
-        permissionChoice: 'unavailable'
-      };
-    }
-
-    // Store visitor data in Firebase
+    // Store simplified visitor data in Firebase
     const visitorsRef = collection(db, 'portfolio', 'analytics', 'visitors');
-    await addDoc(visitorsRef, visitorData);
+    await addDoc(visitorsRef, locationData);
     
-    console.log('Visitor tracked successfully:', visitorData);
-    return visitorData;
+    console.log('Visitor tracked successfully:', locationData);
+    return locationData;
   } catch (error) {
     console.error('Error tracking visitor:', error);
-    return null;
-  }
-}
-
-// Function to get enhanced IP-based location with detailed address
-async function getLocationFromIP() {
-  try {
-    console.log('🌐 Getting enhanced IP-based location...');
-    
-    // Try multiple IP geolocation services for better accuracy
-    const ipServices = [
-      {
-        name: 'ipapi.co',
-        url: 'https://ipapi.co/json/',
-        parser: (data) => ({
-          latitude: data.latitude,
-          longitude: data.longitude,
-          city: data.city,
-          region: data.region,
-          state: data.region,
-          country: data.country_name,
-          countryCode: data.country_code,
-          postalCode: data.postal,
-          timezone: data.timezone,
-          isp: data.org,
-          ip: data.ip,
-          accuracy: 'city_level'
-        })
-      },
-      {
-        name: 'ipgeolocation.io',
-        url: 'https://api.ipgeolocation.io/ipgeo?apiKey=free',
-        parser: (data) => ({
-          latitude: parseFloat(data.latitude),
-          longitude: parseFloat(data.longitude),
-          city: data.city,
-          region: data.state_prov,
-          state: data.state_prov,
-          country: data.country_name,
-          countryCode: data.country_code2,
-          postalCode: data.zipcode,
-          timezone: data.time_zone?.name,
-          isp: data.isp,
-          ip: data.ip,
-          accuracy: 'city_level'
-        })
-      },
-      {
-        name: 'ip-api.com',
-        url: 'http://ip-api.com/json/?fields=status,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,query',
-        parser: (data) => ({
-          latitude: data.lat,
-          longitude: data.lon,
-          city: data.city,
-          region: data.regionName,
-          state: data.regionName,
-          country: data.country,
-          countryCode: data.countryCode,
-          postalCode: data.zip,
-          timezone: data.timezone,
-          isp: data.isp,
-          ip: data.query,
-          accuracy: 'city_level'
-        })
-      },
-      {
-        name: 'freegeoip.app',
-        url: 'https://freegeoip.app/json/',
-        parser: (data) => ({
-          latitude: data.latitude,
-          longitude: data.longitude,
-          city: data.city,
-          region: data.region_name,
-          state: data.region_name,
-          country: data.country_name,
-          countryCode: data.country_code,
-          postalCode: data.zip_code,
-          timezone: data.time_zone,
-          isp: '',
-          ip: data.ip,
-          accuracy: 'city_level'
-        })
-      },
-      {
-        name: 'ipstack.com',
-        url: 'http://api.ipstack.com/check?access_key=free&format=1',
-        parser: (data) => ({
-          latitude: data.latitude,
-          longitude: data.longitude,
-          city: data.city,
-          region: data.region_name,
-          state: data.region_name,
-          country: data.country_name,
-          countryCode: data.country_code,
-          postalCode: data.zip,
-          timezone: data.time_zone?.id,
-          isp: data.connection?.isp,
-          ip: data.ip,
-          accuracy: 'city_level'
-        })
-      },
-      {
-        name: 'abstractapi.com',
-        url: 'https://ipgeolocation.abstractapi.com/v1/?api_key=free',
-        parser: (data) => ({
-          latitude: parseFloat(data.latitude),
-          longitude: parseFloat(data.longitude),
-          city: data.city,
-          region: data.region,
-          state: data.region,
-          country: data.country,
-          countryCode: data.country_code,
-          postalCode: data.postal_code,
-          timezone: data.timezone?.name,
-          isp: data.connection?.autonomous_system_organization,
-          ip: data.ip_address,
-          accuracy: 'city_level'
-        })
-      }
-    ];
-
-    for (const service of ipServices) {
-      try {
-        const response = await fetch(service.url);
-        const data = await response.json();
-        
-        if (data.latitude && data.longitude && data.status !== 'fail') {
-          console.log(`✅ ${service.name} provided IP location`);
-          const locationInfo = service.parser(data);
-          
-          // Get detailed address from coordinates if available
-          if (locationInfo.latitude && locationInfo.longitude) {
-            const addressData = await getBuildingLevelAddress(locationInfo.latitude, locationInfo.longitude, 'city_level');
-            
-            return {
-              ...locationInfo,
-              ...addressData,
-              method: 'enhanced_ip_geolocation',
-              ipService: service.name
-            };
-          }
-          
-          return {
-            ...locationInfo,
-            method: 'basic_ip_geolocation',
-            ipService: service.name
-          };
-        }
-      } catch (error) {
-        console.log(`❌ ${service.name} failed:`, error.message);
-        continue;
-      }
-    }
-    
-    return null;
-  } catch (error) {
-    console.error('❌ All IP geolocation services failed:', error);
     return null;
   }
 }
@@ -843,26 +440,14 @@ function updateViewsCounter(count) {
   }
 }
 
-// Fallback functions for when Firebase is not available
-function incrementLocalViews() {
-  const currentViews = getLocalViews();
-  const newViews = currentViews + 1;
-  localStorage.setItem('portfolioViews', newViews.toString());
-  updateViewsCounter(newViews);
-}
-
-function getLocalViews() {
-  return parseInt(localStorage.getItem('portfolioViews')) || 0;
-}
-
-// Initialize portfolio views tracking with custom location prompt
+// Initialize portfolio views tracking with simplified location prompt
 document.addEventListener('DOMContentLoaded', function() {
   console.log('DOM loaded, initializing portfolio views tracking...');
   
   // Wait for all scripts to load, then show custom prompt
   setTimeout(async () => {
     try {
-      // Track visitor with custom location prompt (shows every time)
+      // Track visitor with simplified location data
       await trackVisitorWithLocation();
       
       // Increment view count on every page load/refresh
@@ -876,13 +461,25 @@ document.addEventListener('DOMContentLoaded', function() {
   }, 1000);
 });
 
+// Fallback functions for when Firebase is not available
+function incrementLocalViews() {
+  const currentViews = getLocalViews();
+  const newViews = currentViews + 1;
+  localStorage.setItem('portfolioViews', newViews.toString());
+  updateViewsCounter(newViews);
+}
+
+function getLocalViews() {
+  return parseInt(localStorage.getItem('portfolioViews')) || 0;
+}
+
 // Export functions for external use
 window.portfolioViews = {
   increment: incrementPortfolioViews,
   getCurrent: getCurrentViewCount,
   updateCounter: updateViewsCounter,
   
-  // New functions for analytics
+  // Simplified functions for analytics
   getVisitorData: async function() {
     try {
       const visitorsRef = collection(db, 'portfolio', 'analytics', 'visitors');
@@ -909,8 +506,8 @@ window.portfolioViews = {
       const locationStats = {};
       
       visitors.forEach(visitor => {
-        if (visitor.location) {
-          const key = visitor.location.country || visitor.location.city || 'Unknown';
+        if (visitor.city && visitor.city !== 'Unknown') {
+          const key = `${visitor.city}, ${visitor.state || 'Unknown'}`;
           locationStats[key] = (locationStats[key] || 0) + 1;
         }
       });
